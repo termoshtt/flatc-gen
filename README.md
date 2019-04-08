@@ -1,5 +1,6 @@
 flatc-gen
 ========
+[![Build Status](https://travis-ci.org/termoshtt/flatc-gen.svg?branch=master)](https://travis-ci.org/termoshtt/flatc-gen)
 
 Generate and include generated Rust binding using proc-macro:
 
