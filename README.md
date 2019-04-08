@@ -18,7 +18,3 @@ Limitations
 [build]
 rustflags = ["--cfg", "procmacro2_semver_exempt"]
 ```
-
-Licensing
-----------
-Original *Flatbuffers* is licensed under the Apache License, Version 2.0. See [LICENSE](https://github.com/google/flatbuffers/blob/master/LICENSE.txt) for the full license text.
