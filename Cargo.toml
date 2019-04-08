@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+  "flatc-gen",
+  "flatc-gen-example",
+]
