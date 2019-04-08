@@ -1,0 +1,12 @@
+language: rust
+sudo: false
+dist: trusty
+
+rust:
+  - nightly
+
+before_script:
+  - rustup component add rustfmt
+
+script:
+  - cargo test -v
