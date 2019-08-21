@@ -1,29 +1,38 @@
-use log::info;
+use failure::{bail, err_msg, format_err, Fallible};
+use log::*;
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::Command,
     thread::sleep,
     time::Duration,
 };
 
-fn check_output(output: &Output, command_name: &str) {
-    if !output.status.success() {
-        let out = String::from_utf8(output.stdout.clone()).expect("Failed to parse output");
-        let err = String::from_utf8(output.stderr.clone()).expect("Failed to parse error output");
-        eprintln!("=== {} output ===", command_name);
-        eprintln!("{}", out);
-        eprintln!("{}", err);
-        panic!(
-            "{} failed with error code: {}",
-            command_name,
-            output.status.code().unwrap()
-        );
+trait EasyExec {
+    fn easy_exec(&mut self) -> Fallible<()>;
+}
+
+impl EasyExec for Command {
+    fn easy_exec(&mut self) -> Fallible<()> {
+        let output = self
+            .output()
+            .map_err(|_| format_err!("Command not found: {:?}", self))?;
+        if !output.status.success() {
+            let out =
+                String::from_utf8(output.stdout).map_err(|_| err_msg("Failed to parse output"))?;
+            let err = String::from_utf8(output.stderr.clone())
+                .map_err(|_| err_msg("Failed to parse error output"))?;
+            error!("Exit command: {:?}", self);
+            error!("Error code: {}", output.status.code().unwrap());
+            error!("{}", out);
+            error!("{}", err);
+        }
+        Ok(())
     }
 }
 
 /// Download and Build latest version of flatc
-fn build_flatc() -> PathBuf {
+pub fn build_flatc() -> Fallible<PathBuf> {
     let work_dir = dirs::cache_dir()
         .expect("Cannot get global cache directory")
         .join("flatc-gen");
@@ -52,50 +61,37 @@ fn build_flatc() -> PathBuf {
     // FIXME use release version instead of HEAD
     let fbs_repo = work_dir.join("flatbuffers");
     if !fbs_repo.exists() {
-        let st = Command::new("git")
+        Command::new("git")
             .args(&["clone", "http://github.com/google/flatbuffers"])
             .current_dir(&work_dir)
-            .status()
-            .expect("Git is not installed");
-        if !st.success() {
-            panic!("Git clone of google/flatbuffers failed");
-        }
+            .easy_exec()?;
     }
 
     // Build flatbuffers
-    let output = Command::new("cmake")
+    Command::new("cmake")
         .args(&["-Bbuild", "-H."])
         .current_dir(&fbs_repo)
-        .output()
-        .expect("cmake not found");
-    check_output(&output, "cmake");
-
-    let output = Command::new("cmake")
+        .easy_exec()?;
+    Command::new("cmake")
         .args(&["--build", "build", "--target", "flatc"])
         .current_dir(&fbs_repo)
-        .output()
-        .expect("cmake not found");
-    check_output(&output, "cmake");
+        .easy_exec()?;
 
-    fbs_repo.join("build/flatc")
+    Ok(fbs_repo.join("build/flatc"))
 }
 
-pub fn flatc_gen(path: impl AsRef<Path>, out_dir: impl AsRef<Path>) {
+/// Generate Rust code from FlatBuffer definitions
+pub fn flatc_gen(path: impl AsRef<Path>, out_dir: impl AsRef<Path>) -> Fallible<()> {
     let path = path.as_ref();
     if !path.exists() {
-        panic!("Flatbuffer file '{}' does not exist.", path.display());
+        bail!("Flatbuffer file '{}' does not exist.", path.display());
     }
-
-    // Generate Rust code from FlatBuffer definitions
-    let flatc = build_flatc();
-    let st = Command::new(flatc)
-        .args(&["-r", "-o"])
+    let flatc = build_flatc()?;
+    Command::new(flatc)
+        .arg("-r")
+        .arg("-o")
         .arg(out_dir.as_ref())
         .arg("-b")
-        .arg(&path)
-        .status()
-        .expect("flatc command failed");
-    if !st.success() {
-        panic!("flatc failed: {}", st.code().expect("No error code"));
-    }
+        .arg(path)
+        .easy_exec()
 }
