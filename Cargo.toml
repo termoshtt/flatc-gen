@@ -5,7 +5,7 @@ authors = ["Toshiki Teramura <toshiki.teramura@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-log = "*"
-dirs = "*"
-file-lock = "1.1"
-failure = "*"
+log = "0.4.8"
+dirs = "2.0.2"
+file-lock = "1.1.20"
+failure = "0.1.5"
