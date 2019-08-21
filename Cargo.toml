@@ -1,6 +1,11 @@
-[workspace]
+[package]
+name = "flatc-gen"
+version = "0.1.0"
+authors = ["Toshiki Teramura <toshiki.teramura@gmail.com>"]
+edition = "2018"
 
-members = [
-  "flatc-gen",
-  "flatc-gen-example",
-]
+[dependencies]
+log = "0.4.8"
+dirs = "2.0.2"
+file-lock = "1.1.20"
+failure = "0.1.5"
