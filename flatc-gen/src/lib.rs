@@ -88,10 +88,18 @@ pub fn flatc_gen(path: impl AsRef<Path>, out_dir: impl AsRef<Path>) -> Fallible<
     }
     let flatc = build_flatc()?;
     Command::new(flatc)
-        .arg("-r")
+        .arg("--rust")
         .arg("-o")
         .arg(out_dir.as_ref())
         .arg("-b")
         .arg(path)
         .easy_exec()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn build_flatc() {
+        super::build_flatc().unwrap();
+    }
 }
