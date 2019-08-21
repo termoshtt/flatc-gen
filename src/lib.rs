@@ -1,11 +1,8 @@
 use failure::{bail, err_msg, format_err, Fallible};
-use log::*;
 use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
-    thread::sleep,
-    time::Duration,
 };
 
 trait EasyExec {
@@ -22,10 +19,10 @@ impl EasyExec for Command {
                 String::from_utf8(output.stdout).map_err(|_| err_msg("Failed to parse output"))?;
             let err = String::from_utf8(output.stderr.clone())
                 .map_err(|_| err_msg("Failed to parse error output"))?;
-            error!("Exit command: {:?}", self);
-            error!("Error code: {}", output.status.code().unwrap());
-            error!("{}", out);
-            error!("{}", err);
+            eprintln!("Error code: {}", output.status.code().unwrap());
+            eprintln!("{}", out);
+            eprintln!("{}", err);
+            bail!("Error: {:?}", self);
         }
         Ok(())
     }
@@ -34,29 +31,11 @@ impl EasyExec for Command {
 /// Download and Build latest version of flatc
 pub fn build_flatc() -> Fallible<PathBuf> {
     let work_dir = dirs::cache_dir()
-        .expect("Cannot get global cache directory")
+        .ok_or(err_msg("Cannot get cache dir"))?
         .join("flatc-gen");
-    fs::create_dir_all(&work_dir).expect("Failed to create cache directory");
-    info!("Use global cache dir: {}", work_dir.display());
-
-    // inter-process exclusion (parallel cmake will cause problems)
-    let lock_file = work_dir.join("flatc-gen.lock");
-    fs::File::create(&lock_file).expect("Cannot create lock file");
-    let mut count = 0;
-    let _lock = loop {
-        match file_lock::FileLock::lock(lock_file.to_str().unwrap(), true, true) {
-            Ok(lock) => break lock,
-            Err(err) => {
-                count += 1;
-                warn!("Waiting lock of {}, {:?}", lock_file.display(), err);
-            }
-        };
-        // Try 30s to get lock
-        if count > 30 {
-            panic!("Cannot get lock of {} in 30s", lock_file.display());
-        }
-        sleep(Duration::from_secs(1));
-    };
+    if !work_dir.exists() {
+        fs::create_dir_all(&work_dir)?;
+    }
 
     // FIXME use release version instead of HEAD
     let fbs_repo = work_dir.join("flatbuffers");
@@ -98,11 +77,6 @@ pub fn flatc_gen(path: impl AsRef<Path>, out_dir: impl AsRef<Path>) -> Fallible<
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn build_flatc() {
-        super::build_flatc().unwrap();
-    }
-
     #[test]
     fn flatc_gen() {
         // Be sure that this test runs at the top of this repo
