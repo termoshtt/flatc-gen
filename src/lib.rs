@@ -106,6 +106,7 @@ mod tests {
     #[test]
     fn flatc_gen() {
         // Be sure that this test runs at the top of this repo
+        super::build_flatc().unwrap();
         super::flatc_gen("fbs/addressbook.fbs", "fbs_test").unwrap();
         std::fs::File::open("fbs_test/addressbook_generated.rs").unwrap();
     }
