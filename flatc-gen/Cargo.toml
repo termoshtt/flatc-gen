@@ -4,16 +4,7 @@ version = "0.1.0"
 authors = ["Toshiki Teramura <toshiki.teramura@gmail.com>"]
 edition = "2018"
 
-[lib]
-proc-macro = true
-
 [dependencies]
-quote = "1.0"
-proc-macro2 = "1.0"
 log = "*"
 dirs = "*"
 file-lock = "1.1"
-
-[dependencies.syn]
-version = "1.0"
-features = ["full"]

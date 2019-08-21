@@ -1,14 +1,11 @@
-extern crate proc_macro;
-
-use log::warn;
-use proc_macro::TokenStream;
-use std::fs::{self, File};
-use std::io::Read;
-use std::path::PathBuf;
-use std::process::{Command, Output};
-use std::thread::sleep;
-use std::time::Duration;
-use syn::parse_macro_input;
+use log::info;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::{Command, Output},
+    thread::sleep,
+    time::Duration,
+};
 
 fn check_output(output: &Output, command_name: &str) {
     if !output.status.success() {
@@ -25,44 +22,17 @@ fn check_output(output: &Output, command_name: &str) {
     }
 }
 
-#[proc_macro]
-pub fn flatc_gen(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as syn::LitStr);
-
-    // Validate input file path
-    let path = PathBuf::from(input.value());
-    let path = if path.is_relative() {
-        let src = input.span().source_file(); // XXX This needs `RUSTFLAG=--cfg procmacro2_semver_exempt`
-                                              // see https://docs.rs/proc-macro2/*/proc_macro2/#unstable-features
-        if !src.is_real() {
-            panic!("flatc_gen! with relative path is supported only from real file and nightly compiler");
-        }
-        let src = src.path();
-        let basedir = src.parent().unwrap();
-        basedir.join(path)
-    } else {
-        path
-    };
-
-    if !path.exists() {
-        panic!("Flatbuffer file '{}' does not exist.", path.display());
-    }
-    let stem = path
-        .file_stem()
-        .expect("Cannot get the stem portion of filename")
-        .to_str()
-        .expect("Cannot convert filename into UTF-8");
-
+/// Download and Build latest version of flatc
+fn build_flatc() -> PathBuf {
     let work_dir = dirs::cache_dir()
         .expect("Cannot get global cache directory")
         .join("flatc-gen");
     fs::create_dir_all(&work_dir).expect("Failed to create cache directory");
-    let lock_file = work_dir.join("flatc-gen.lock");
-    {
-        fs::File::create(&lock_file).expect("Cannot create lock file");
-    }
+    info!("Use global cache dir: {}", work_dir.display());
 
     // inter-process exclusion (parallel cmake will cause problems)
+    let lock_file = work_dir.join("flatc-gen.lock");
+    fs::File::create(&lock_file).expect("Cannot create lock file");
     let mut count = 0;
     let _lock = loop {
         match file_lock::FileLock::lock(lock_file.to_str().unwrap(), true, true) {
@@ -79,8 +49,6 @@ pub fn flatc_gen(input: TokenStream) -> TokenStream {
         sleep(Duration::from_secs(1));
     };
 
-    // Download flatbuffers
-    //
     // FIXME use release version instead of HEAD
     let fbs_repo = work_dir.join("flatbuffers");
     if !fbs_repo.exists() {
@@ -109,12 +77,20 @@ pub fn flatc_gen(input: TokenStream) -> TokenStream {
         .expect("cmake not found");
     check_output(&output, "cmake");
 
-    let flatc = fbs_repo.join("build/flatc");
+    fbs_repo.join("build/flatc")
+}
+
+pub fn flatc_gen(path: impl AsRef<Path>, out_dir: impl AsRef<Path>) {
+    let path = path.as_ref();
+    if !path.exists() {
+        panic!("Flatbuffer file '{}' does not exist.", path.display());
+    }
 
     // Generate Rust code from FlatBuffer definitions
+    let flatc = build_flatc();
     let st = Command::new(flatc)
         .args(&["-r", "-o"])
-        .arg(&work_dir)
+        .arg(out_dir.as_ref())
         .arg("-b")
         .arg(&path)
         .status()
@@ -122,29 +98,4 @@ pub fn flatc_gen(input: TokenStream) -> TokenStream {
     if !st.success() {
         panic!("flatc failed: {}", st.code().expect("No error code"));
     }
-
-    let generated = work_dir.join(format!("{}_generated.rs", stem));
-    if !generated.exists() {
-        panic!(
-            "Generated Rust file '{}' does not found.",
-            generated.display()
-        );
-    }
-
-    // Optional: Format generated code
-    match Command::new("rustfmt").arg(&generated).status() {
-        Ok(st) => {
-            if !st.success() {
-                panic!("rustfmt failed: {}", st.code().expect("No error code"));
-            }
-        }
-        Err(_) => warn!("rustfmt is not installed"),
-    }
-
-    let mut f = File::open(&generated).unwrap();
-    let mut code = String::new();
-    f.read_to_string(&mut code)
-        .expect("Failed to read generated file");
-    let ts: proc_macro2::TokenStream = syn::parse_str(&code).unwrap();
-    ts.into()
 }
