@@ -48,7 +48,7 @@ pub fn build_flatc() -> Fallible<PathBuf> {
             Ok(lock) => break lock,
             Err(err) => {
                 count += 1;
-                eprintln!("Waiting lock of {}, {:?}", lock_file.display(), err);
+                warn!("Waiting lock of {}, {:?}", lock_file.display(), err);
             }
         };
         // Try 30s to get lock
@@ -84,7 +84,7 @@ pub fn build_flatc() -> Fallible<PathBuf> {
 pub fn flatc_gen(path: impl AsRef<Path>, out_dir: impl AsRef<Path>) -> Fallible<()> {
     let path = path.as_ref();
     if !path.exists() {
-        bail!("Flatbuffer file '{}' does not exist.", path.display());
+        bail!("Flatbuffer file {} does not exist.", path.display());
     }
     let flatc = build_flatc()?;
     Command::new(flatc)
@@ -101,5 +101,12 @@ mod tests {
     #[test]
     fn build_flatc() {
         super::build_flatc().unwrap();
+    }
+
+    #[test]
+    fn flatc_gen() {
+        // Be sure that this test runs at the top of this repo
+        super::flatc_gen("fbs/addressbook.fbs", "fbs_test").unwrap();
+        std::fs::File::open("fbs_test/addressbook_generated.rs").unwrap();
     }
 }
