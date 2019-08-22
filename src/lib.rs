@@ -62,6 +62,7 @@ pub fn build_flatc() -> Fallible<PathBuf> {
 /// Generate Rust code from FlatBuffer definitions
 pub fn flatc_gen(path: impl AsRef<Path>, out_dir: impl AsRef<Path>) -> Fallible<()> {
     let path = path.as_ref();
+    let out_dir = out_dir.as_ref();
     if !path.exists() {
         bail!("Flatbuffer file {} does not exist.", path.display());
     }
@@ -69,10 +70,17 @@ pub fn flatc_gen(path: impl AsRef<Path>, out_dir: impl AsRef<Path>) -> Fallible<
     Command::new(flatc)
         .arg("--rust")
         .arg("-o")
-        .arg(out_dir.as_ref())
+        .arg(out_dir)
         .arg("-b")
         .arg(path)
-        .easy_exec()
+        .easy_exec()?;
+
+    let stem = path.file_stem().unwrap();
+    Command::new("rustfmt")
+        .arg(out_dir.join(format!("{}_generated.rs", stem.to_str().unwrap())))
+        .easy_exec()?;
+
+    Ok(())
 }
 
 #[cfg(test)]
